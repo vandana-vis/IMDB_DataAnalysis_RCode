@@ -1,0 +1,515 @@
+---
+title: "DA Project"
+author: "YAMINI PENAMAKURU"
+date: "4/26/2021"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r}
+library(tidyverse)
+library(randomForest)
+library(MASS)
+library(tree)
+
+require(caret); 
+require(leaps); 
+require(tidyverse); 
+require(ggthemes); 
+require(broom); 
+require(knitr)
+
+
+```
+
+Calling Data
+
+```{r}
+setwd("C:/Sudheer/Vandu/IUPUI_Assignments/Spring_2021/Data Analytics/Project/Attempt_2/Dataset_IMDb/")
+Movies = read.csv("IMDb movies.csv")
+Ratings = read.csv("IMDb ratings.csv")
+```
+
+Joining Datasets
+
+```{r}
+fullData = merge(Movies, Ratings, by = c("imdb_title_id", "imdb_title_id"))
+```
+
+Samples?
+
+```{r}
+#Add any code here to get a sample of the data instead of the entire dataset. I've tested it on the entire dataset and it'll go and complete, but it takes a while
+#name your sample movieData to avoid confusion. Below, I have made a random sample of 1000 for movieData
+
+movieDataIndex = sample(1:length(fullData$genre))
+movieData = fullData[movieDataIndex,]
+```
+
+Splits up Genre into List
+
+```{r}
+movieData = transform(movieData, genre = strsplit(genre, ", "))
+```
+
+Adds columns for each possible genre, adds values to column for if they do or do not belong to that category.
+
+```{r}
+movieData$Action = NA
+movieData$Adventure = NA
+movieData$Animation = NA
+movieData$Biography = NA
+movieData$Comedy = NA
+movieData$Crime = NA
+movieData$Documentary = NA
+movieData$Drama = NA
+movieData$Family = NA
+movieData$Fantasy = NA
+movieData$FilmNoir = NA
+movieData$History = NA
+movieData$Horror = NA
+movieData$Music = NA
+movieData$Musical = NA
+movieData$Mystery = NA
+movieData$Romance = NA
+movieData$SciFi = NA
+movieData$ShortFilm = NA
+movieData$Sport = NA
+movieData$Superhero = NA
+movieData$Thriller = NA
+movieData$War = NA
+movieData$Western = NA
+
+genreCount = function(word, genreList){
+  return(ifelse(word %in% genreList[[1]], 1, 0))
+}
+
+for(i in 1:length(movieData$genre)){
+  genreList = movieData[i, 6]
+  movieData[i, 71] = genreCount("Action", genreList)
+  movieData[i, 72] = genreCount("Adventure", genreList)
+  movieData[i, 73] = genreCount("Animation", genreList)
+  movieData[i, 74] = genreCount("Biography", genreList)
+  movieData[i, 75] = genreCount("Comedy", genreList)
+  movieData[i, 76] = genreCount("Crime", genreList)
+  movieData[i, 77] = genreCount("Documentary", genreList)
+  movieData[i, 78] = genreCount("Drama", genreList)
+  movieData[i, 79] = genreCount("Family", genreList)
+  movieData[i, 80] = genreCount("Fantasy", genreList)
+  movieData[i, 81] = genreCount("Film Noir", genreList)
+  movieData[i, 82] = genreCount("History", genreList)
+  movieData[i, 83] = genreCount("Horror", genreList)
+  movieData[i, 84] = genreCount("Music", genreList)
+  movieData[i, 85] = genreCount("Musical", genreList)
+  movieData[i, 86] = genreCount("Mystery", genreList)
+  movieData[i, 87] = genreCount("Romance", genreList)
+  movieData[i, 88] = genreCount("Sci-Fi", genreList)
+  movieData[i, 89] = genreCount("Short Film", genreList)
+  movieData[i, 90] = genreCount("Sport", genreList)
+  movieData[i, 91] = genreCount("Superhero", genreList)
+  movieData[i, 92] = genreCount("Thriller", genreList)
+  movieData[i, 93] = genreCount("War", genreList)
+  movieData[i, 94] = genreCount("Western", genreList)
+}
+```
+
+This bit just lets you see the output with all the variables
+
+```{r}
+
+
+movieData$Action <- factor(movieData$Action, levels = c(0,1),labels = c("0", "1"))
+movieData$Adventure <- factor(movieData$Adventure,levels = c(0,1),labels = c("0", "1"))
+movieData$Animation <- factor(movieData$Animation, levels = c(0,1), labels = c("0", "1"))
+movieData$Biography <- factor(movieData$Biography, levels = c(0,1), labels = c("0", "1"))
+
+movieData$Comedy <- factor(movieData$Comedy, levels = c(0,1), labels = c("0", "1"))
+movieData$Crime <- factor(movieData$Crime, levels = c(0,1),labels = c("0", "1"))
+
+
+movieData$Documentary <- factor(movieData$Documentary, levels = c(0,1), labels = c("0", "1"))
+movieData$Drama <- factor(movieData$Drama, levels = c(0,1), labels = c("0", "1"))
+movieData$Family <- factor(movieData$Family, levels = c(0,1), labels = c("0", "1"))
+movieData$Fantasy <- factor(movieData$Fantasy, levels = c(0,1), labels = c("0", "1"))
+
+movieData$FilmNoir <- factor(movieData$FilmNoir, levels = c(0,1), labels = c("0", "1"))
+movieData$History <- factor(movieData$History, levels = c(0,1), labels = c("0", "1"))
+movieData$Horror <- factor(movieData$Horror,  levels = c(0,1),labels = c("0", "1"))
+movieData$Music <- factor(movieData$Music,  levels = c(0,1),labels = c("0", "1"))
+
+
+movieData$Musical <- factor(movieData$Musical, levels = c(0,1), labels = c("0", "1"))
+movieData$Mystery <- factor(movieData$Mystery, levels = c(0,1), labels = c("0", "1"))
+movieData$Romance <- factor(movieData$Romance, levels = c(0,1), labels = c("0", "1"))
+movieData$SciFi <- factor(movieData$SciFi, levels = c(0,1), labels = c("0", "1"))
+
+movieData$ShortFilm <- factor(movieData$ShortFilm, levels = c(0,1), labels = c("0", "1"))
+movieData$Sport <- factor(movieData$Sport, levels = c(0,1), labels = c("0", "1"))
+movieData$Superhero <- factor(movieData$Superhero, levels = c(0,1), labels = c("0", "1"))
+movieData$Thriller <- factor(movieData$Thriller, levels = c(0,1), labels = c("0", "1"))
+
+movieData$War <- factor(movieData$War, levels = c(0,1), labels = c("0", "1"))
+movieData$Western <- factor(movieData$Western, levels = c(0,1), labels = c("0", "1"))
+
+
+```
+
+
+```{r}
+
+summary(movieData)
+#View(movieData)
+
+```
+
+\
+Out of 85000 records, we can see from the summary that gender/age based votes and us/non-us votes columns have null values, hence removing these columns and concentrating only on number of votes and genre fields for this project.
+There are more movies under Drama, Comedy, Romance, Action, Thriller, Crime, Horror
+\
+
+
+```{r}
+
+
+mydata <- subset(movieData, select=c(imdb_title_id, title, year, duration, avg_vote, votes, votes_10, votes_9, votes_8, votes_7, votes_6,non_us_voters_rating ,Action, Adventure, Animation, Biography, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Music, Mystery, Romance, SciFi, Thriller, War))
+
+
+```
+
+
+
+```{r}
+
+#checking for correlations
+#investigate relationship numerically
+
+IMDb_data1 <- subset(mydata, select=c(avg_vote, votes_10, votes_9, votes_8, votes_7, votes_6))
+
+cor(IMDb_data1, method = c("pearson"))
+
+
+
+```
+
+
+\
+
+From the above correlation matrix, we can see that there is strong correlation between votes_9 and votes_10, votes_7 and votes_6, votes_7 and votes_8.
+\
+
+
+```{r}
+pairs(IMDb_data1)
+
+```
+\
+
+From the pairs plot, we can see that there is linear relationship between votes_10, votes_9, votes_8, votes_7, votes_6.
+The relationship of average voring with other votes is not linear,  but it increases as the number of votes increase at first and then remains saturated to a certain level. We can see that average rating tends to fall between 6 and 9 because it looks like they have the largest number of data points.
+
+
+\
+
+```{r}
+
+#pairs(IMDb_data1)
+
+#Action, Adventure, Animation, Biography, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Music, Mystery, Romance, SciFi, Thriller, War)
+
+
+library(ggplot2)
+
+ggplot(data=movieData, aes(x=Action, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Action ~ avg_vote")
+ggplot(data=movieData,  aes(x=Adventure, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Adventure ~ avg_vote")
+ggplot(data=movieData, aes(x=Animation, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Animation ~ avg_vote")
+ggplot(data=movieData, aes(x=Biography, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Biography ~ avg_vote")
+ggplot(data=movieData, aes(x=Comedy, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Comedy ~ avg_vote")
+ggplot(data=movieData, aes(x=Crime, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Crime ~ avg_vote")
+ggplot(data=movieData, aes(x=Horror, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Horror ~ avg_vote")
+ggplot(data=movieData, aes(x=Thriller, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Thriller ~ avg_vote")
+ggplot(data=movieData, aes(x=Drama, y=avg_vote)) +
+  geom_boxplot() +  labs(title = "Drama ~ avg_vote")
+
+
+
+```
+
+\
+
+Boxplot analysis:
+
+Action ~ avg_vote:
+If the movie is based on action genre, then from the plot, we can see that the rating for such movies could be between 5 and 6. There are possible outliers too. but the mean is at 5.7 and  which could indicate that action movies are conntributing for the avg_vote rating.
+
+Adventure ~ avg_vote:
+Whether a movie is of Adventure genre or not, it did not affect the avg vote so much. The graph is not helpful for obvious deduction of conclusion. Further investigation is required.
+
+animation ~ avg_vote:
+A movie under animation genre seems to get a better voting and the avg vote is above 6. Although there are outliers, the mean stands at 6.3 for a movie with animation genre.
+
+
+Biography ~ avg_vote:
+avg_vote is more for a movie with Biography genre compared to movie that is not. Although the number of votes received is less for biography genre, the avg_vote received for the movies is around 6.5
+
+Comedy ~ avg_vote:
+avg_vote is not affected whether a movie is Comedy or not. This could be because of the number of movies being less under comedy genre. Further investigation is required.
+
+Crime ~ avg_vote:
+avg_vote is not affected whether a movie is Crime or not. This could be because of the number of movies being less under crime genre. Further investigation is required.
+
+Horror ~ avg_vote:
+The box plot shows that the number of movies under Horror genre are less compared to others, and in turn affecting the avg vote to be under 5.
+
+Thriller ~ avg_vote:
+For the number of movies that are under Thriller genre, the avg_rating is aroung 5 and 6 with mean at 5.5.
+
+Drama ~ avg_vote:
+From the box plot it is clear that Drama is definitely affecting the avg_vote. The rating for a movie being under Drama genre is above 6.
+
+
+\
+
+```{r}
+IMDb_data <- subset(mydata, select=c(avg_vote, votes_10, votes_9, votes_8, votes_7, votes_6, Action, Adventure, Animation, Biography, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Music, Mystery, Romance, SciFi, Thriller, War))
+
+
+```
+\
+
+
+
+Linear regression:
+
+```{r}
+
+#linear regression
+#Documentary, Drama, Fantasy, Horror, Music, Mystery, Romance, SciFi, Thriller, War ----> not included
+
+set.seed(5)
+subset <- sample(1:nrow(IMDb_data), 0.7*nrow(IMDb_data))
+IMDB.train <- IMDb_data[subset, ]
+IMDB.test <- IMDb_data[-subset,]
+IMDB.test
+
+
+#lm.IMDB_1 <- lm(avg_vote ~ votes_10, data = IMDB.train)
+#avg_vote.predreg <- predict(lm.IMDB_1, IMDB.test)
+#sqrt(mean(resid(lm.IMDB_1) ^ 2))
+
+lm.IMDB_2 <- lm(avg_vote ~ votes_10+ votes_9, data = IMDB.train)
+avg_vote.predreg2 <- predict(lm.IMDB_2, IMDB.test)
+sqrt(mean(resid(lm.IMDB_2) ^ 2))
+
+lm.IMDB_3 <- lm(avg_vote ~ votes_10+ votes_9+ votes_8, data = IMDB.train)
+avg_vote.predreg3 <- predict(lm.IMDB_3, IMDB.test)
+sqrt(mean(resid(lm.IMDB_3) ^ 2))
+
+lm.IMDB_4 <- lm(avg_vote ~ votes_10+ votes_9+ votes_8+ votes_7, data = IMDB.train)
+avg_vote.predreg4 <- predict(lm.IMDB_4, IMDB.test)
+sqrt(mean(resid(lm.IMDB_4) ^ 2))
+
+lm.IMDB_5 <- lm(avg_vote ~ votes_10 +votes_9 +votes_8 +votes_7 +votes_6, data = IMDB.train)
+avg_vote.predreg5 <- predict(lm.IMDB_5, IMDB.test)
+sqrt(mean(resid(lm.IMDB_5) ^ 2))
+
+lm.IMDB_6 <- lm(avg_vote ~ votes_10 +votes_9 +votes_8 +votes_7 +votes_6+Adventure, data = IMDB.train)
+avg_vote.predreg6 <- predict(lm.IMDB_6, IMDB.test)
+sqrt(mean(resid(lm.IMDB_6) ^ 2))
+
+lm.IMDB_7 <- lm(avg_vote ~ votes_10 +votes_9 +votes_8 +votes_7 +votes_6 + Adventure+ Animation, data = IMDB.train)
+avg_vote.predreg7 <- predict(lm.IMDB_7, IMDB.test)
+sqrt(mean(resid(lm.IMDB_7) ^ 2))
+
+lm.IMDB_8 <- lm(avg_vote ~ votes_10 +votes_9 +votes_8 +votes_7 +votes_6+ Adventure+ Animation +Biography, data = IMDB.train)
+avg_vote.predreg8 <- predict(lm.IMDB_8, IMDB.test)
+sqrt(mean(resid(lm.IMDB_8) ^ 2))
+
+lm.IMDB_9 <- lm(avg_vote ~ votes_10 +votes_9 +votes_8 +votes_7 +votes_6 + Adventure+ Animation+Biography+Comedy, data = IMDB.train)
+avg_vote.predreg9 <- predict(lm.IMDB_9, IMDB.test)
+sqrt(mean(resid(lm.IMDB_9) ^ 2))
+
+lm.IMDB_10 <- lm(avg_vote ~  votes_10 +votes_9 +votes_8 +votes_7 +votes_6+Action+ Adventure+ Animation+Biography+Crime, data = IMDB.train)
+avg_vote.predreg10 <- predict(lm.IMDB_10, IMDB.test)
+sqrt(mean(resid(lm.IMDB_10) ^ 2))
+
+
+lm.IMDB_full <- lm(avg_vote ~ votes_10+ votes_9+ votes_8+ votes_7+ votes_6+ Action+ Adventure+ Animation+ Biography+ Crime+ Drama+ Horror+ Music+ Mystery+ Romance+ SciFi+ Thriller+ War, data = IMDB.train)
+avg_vote.predregfull <- predict(lm.IMDB_full, IMDB.test)
+sqrt(mean(resid(lm.IMDB_full) ^ 2))
+
+
+summary(lm.IMDB_full)
+
+
+par(mfrow=c(2,2))
+plot(lm.IMDB_full)
+
+AIC(lm.IMDB_full)
+BIC(lm.IMDB_full)
+
+plot(lm.IMDB_full, which=5, col=c("blue")) 
+
+
+actualsfull <- (IMDB.test$avg_vote)
+predictedsfull <- avg_vote.predregfull
+
+actuals.predsfull <- data.frame(actualsfull, predictedsfull)
+#cor(actuals.predsfull)
+
+
+min_max_accuracyfull <- mean(apply(actuals.predsfull, 1, min) / apply(actuals.predsfull, 1, max))
+min_max_accuracyfull
+
+head(actuals.predsfull)
+```
+
+\
+
+From our linear regression model using forward stepwise selection, the best model with least RMSE of 1.09465 is lm.IMDB_full. The accuracy of this model is 86.6% approximately.
+
+Comedy, Documentary, Fantasy turn out to be statistically insignificant from analyzing the p-values. Multiple R-squared and Adjusted R-squared and around 0.2 which is good.
+
+We can see from the residual Vs Fitted graph that linearity seems to hold reasonably well up to some extent as the red line is close to the dashed line. As we move to the right on the x-axis, the spread of the residuals seems to be increasing below the redline accounting for a slight deviation from the linearity.
+
+We can see from the normal QQ plot that the points fall along the line in the middle of the graph, but curve off at the lower extremes. This means that we have more extreme values at the lower end. From this we can say that IMDB dataset is not precisely normal, but not too far off. The dataset is left-skewed (or negatively skewed)
+
+From scale-location plot, the red line is approximately horizontal. We can also see that the spread of the datapoints is high between 4 and 7 and low above 10.
+
+
+There are possible high leverage points below cook's distance on the left extreme of x-axis which can be analyzed from the Residual Vs leverage plot and removing these points can change the model output.
+
+Even though predictions is not part of this project, we have checked the predictions too on test data to see how well the model is able to predict for further clarification. The predictions look good and not very deviated from the original values, which suggests that our model is accurate enough.
+
+\
+
+
+LASSO
+
+```{r}
+
+# Loading the library
+library(glmnet)
+ 
+
+x_vars <- model.matrix(avg_vote~. , data = IMDb_data)[,-1]
+y_var <- IMDb_data$avg_vote
+lambda_seq <- 10^seq(2, -2, by = -.1)
+ 
+# Splitting the data into test and train
+set.seed(86)
+train = sample(1:nrow(x_vars), nrow(x_vars)/2)
+x_test = (-train)
+y_test = y_var[x_test]
+ 
+cv_output <- cv.glmnet(x_vars[train,], y_var[train],
+                       alpha = 1, lambda = lambda_seq)
+ 
+plot(cv_output)
+# identifying best lamda
+best_lam <- cv_output$lambda.min
+best_lam
+
+
+```
+
+
+```{r}
+# Rebuilding the model with best lamda value identified
+lasso_best <- glmnet(x_vars[train,], y_var[train], alpha = 1, lambda = best_lam)
+pred <- predict(lasso_best, s = best_lam, newx = x_vars[x_test,])
+
+
+```
+
+
+```{r}
+coef(lasso_best)
+
+```
+
+
+\
+Using random forest to find the best predictors.
+
+```{r}
+#train = sample(1:nrow(Carseats)*0.7) ,train.car = Carseats[train, ] ,test.car = Carseats[-train,]
+
+
+set.seed(5)
+subset <- sample(1:nrow(IMDb_data), 0.7*nrow(IMDb_data))
+IMDB.trainrf <- IMDb_data[subset, ]
+IMDB.testrf <- IMDb_data[-subset,]
+#IMDB.testrf
+
+
+set.seed(1)
+IMDB_rf = randomForest(avg_vote ~  votes_10 +votes_9 +votes_8 +votes_7 +votes_6+ Action + Adventure+ Animation+Biography+Crime+ Drama+ Horror+ Music+ Mystery+ Romance+ SciFi+ Thriller+ War, data=IMDB.trainrf, mtry = 4, importance = TRUE)
+yhat.IMDB = predict(IMDB_rf, newdata=IMDB.testrf)
+```
+
+
+```{r}
+importance(IMDB_rf)
+
+varImpPlot(IMDB_rf)
+
+```
+
+\
+
+From the above plot we can see that votes_6, Horror and votes_10 are the most important predictors for the dataset. We can also interpret from the plot that we we don't consider these predictors, there will substantially be a great decrease in the accuracy.
+
+
+\
+
+
+Boosting
+
+```{r}
+library(gbm)
+
+boost.IMDB = gbm(avg_vote ~ ., data = IMDB.train, distribution = "gaussian", n.trees = 1000,  interaction.depth = 4, shrinkage = 0.01)
+summary(boost.IMDB)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
